@@ -63,7 +63,7 @@ def  evaluate_classifier(model, trans, test_loader, dec=None, args=None, classif
         observed_data, observed_mask, observed_tp \
             = test_batch[:, :, :dim], test_batch[:, :, dim:2*dim], test_batch[:, :, -1]
         with torch.no_grad():
-            out, query = model(
+            out, query, latent_tp = model(
                 torch.cat((observed_data, observed_mask), 2), observed_tp)
             if reconst:
                 qz0_mean, qz0_logvar = out[:, :,

@@ -81,7 +81,7 @@ if __name__ == '__main__':
     #         dim, torch.linspace(0, 1., 128), args.latent_dim, args.rec_hidden, 128, learn_emb=args.learn_emb).to(device)
     # elif args.enc == 'mtan_rnn':
     rec = models.enc_mtan_rnn(
-        dim, torch.linspace(0, 1., args.num_ref_points), args.latent_dim, args.rec_hidden, 
+        dim, args.num_ref_points, args.latent_dim, args.rec_hidden, 
         embed_time=128, learn_emb=args.learn_emb, num_heads=args.enc_num_heads).to(device)
 
     # if args.dec == 'rnn3':
@@ -89,7 +89,7 @@ if __name__ == '__main__':
     #         dim, torch.linspace(0, 1., 128), args.latent_dim, args.gen_hidden, 128, learn_emb=args.learn_emb).to(device)
     # elif args.dec == 'mtan_rnn':
     dec = models.dec_mtan_rnn(
-        dim, torch.linspace(0, 1., args.num_ref_points), args.latent_dim, args.gen_hidden, 
+        dim, args.latent_dim, args.gen_hidden, 
         embed_time=128, learn_emb=args.learn_emb, num_heads=args.dec_num_heads).to(device)
     
     set_trans = setmodels.SetTransformer(dim_input=128+args.latent_dim, num_outputs=256, dim_output= 148).to(device)
@@ -129,7 +129,7 @@ if __name__ == '__main__':
             batch_len  = train_batch.shape[0]
             observed_data, observed_mask, observed_tp \
                 = train_batch[:, :, :dim], train_batch[:, :, dim:2*dim], train_batch[:, :, -1]
-            out, query = rec(torch.cat((observed_data, observed_mask), 2), observed_tp)
+            out, query, latent_tp = rec(torch.cat((observed_data, observed_mask), 2), observed_tp)
             qz0_mean, qz0_logvar = out[:, :, :args.latent_dim], out[:, :, args.latent_dim:]
             epsilon = torch.randn(args.k_iwae, qz0_mean.shape[0], qz0_mean.shape[1], qz0_mean.shape[2]).to(device)
             z0 = epsilon * torch.exp(.5 * qz0_logvar) + qz0_mean
@@ -144,7 +144,7 @@ if __name__ == '__main__':
             
             # print(f"z0: {z0.shape}, out: {out.shape}, observed_data: {observed_data.shape}, observed_tp: {observed_tp.shape}, pred_y: {pred_y.shape}")
             pred_x = dec(
-                z0, observed_tp[None, :, :].repeat(args.k_iwae, 1, 1).view(-1, observed_tp.shape[1]))
+                combined_z0, observed_tp[None, :, :].repeat(args.k_iwae, 1, 1).view(-1, observed_tp.shape[1]), latent_tp)
             pred_x = pred_x.view(args.k_iwae, batch_len, pred_x.shape[1], pred_x.shape[2]) #nsample, batch, seqlen, dim
             # z0: torch.Size([50(batch), 128(rftp), 20(ldim)]), out: torch.Size([50, 128, 40]), observed_data: torch.Size([50, 203, 41]), observed_tp: torch.Size([50, 203]), pred_y: torch.Size([50, 2])
             # compute loss

@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-
+from setmodels import *
 
 class create_classifier(nn.Module):
  
@@ -93,11 +93,12 @@ class enc_mtan_rnn(nn.Module):
         self.n_ref = n_ref
         self.learn_emb = learn_emb
         self.att = multiTimeAttention(2*input_dim, nhidden, embed_time, num_heads)
-        self.gru_rnn = nn.GRU(nhidden+embed_time, nhidden+embed_time, bidirectional=True, batch_first=True)
+        self.set = SetTransformer(nhidden+embed_time, n_ref, nhidden)
+        self.gru_rnn = nn.GRU(nhidden, nhidden, bidirectional=True, batch_first=True)
         self.hiddens_to_z0 = nn.Sequential(
-            nn.Linear(2*nhidden+2*embed_time, 50),
+            nn.Linear(2*nhidden, 50),
             nn.ReLU(),
-            nn.Linear(50, latent_dim * 2+ embed_time))
+            nn.Linear(50, latent_dim * 2))
         if learn_emb:
             self.periodic = nn.Linear(1, embed_time-1)
             self.linear = nn.Linear(1, 1)
@@ -139,7 +140,8 @@ class enc_mtan_rnn(nn.Module):
         query_expanded = query.repeat(batch_len, 1, 1)         
         combined_out = torch.cat((out, query_expanded), dim=2)   
         
-        out, _ = self.gru_rnn(combined_out)
+        out = self.set(combined_out)
+        out, _ = self.gru_rnn(out)
         out = self.hiddens_to_z0(out)
 #        print(f"query : {query.shape}") query : torch.Size([1, 128, 128])
         # query 1 x 128 x 128
@@ -149,7 +151,7 @@ class enc_mtan_rnn(nn.Module):
 class dec_mtan_rnn(nn.Module):
  
     def __init__(self, input_dim, latent_dim=2, nhidden=16, 
-                 embed_time=16, num_heads=1, learn_emb=False, device='cuda'):
+                 embed_time=16, n_ref=128, num_heads=1, learn_emb=False, device='cuda'):
         super(dec_mtan_rnn, self).__init__()
         self.embed_time = embed_time
         self.dim = input_dim
@@ -157,7 +159,8 @@ class dec_mtan_rnn(nn.Module):
         self.nhidden = nhidden
         self.learn_emb = learn_emb
         self.att = multiTimeAttention(2*nhidden, 2*nhidden, embed_time, num_heads)
-        self.gru_rnn = nn.GRU(latent_dim+embed_time, nhidden+embed_time, bidirectional=True, batch_first=True)    
+        self.set = SetTransformer(latent_dim+embed_time, n_ref, latent_dim)
+        self.gru_rnn = nn.GRU(latent_dim, nhidden, bidirectional=True, batch_first=True)    
         self.z0_to_obs = nn.Sequential(
             nn.Linear(2*nhidden, 50),
             nn.ReLU(),
@@ -194,8 +197,8 @@ class dec_mtan_rnn(nn.Module):
             query = self.fixed_time_embedding(time_steps).to(self.device)
             key = self.fixed_time_embedding(latent_tp.unsqueeze(0)).to(self.device)
         
-        out, _ = self.gru_rnn(z)
-        out = out[:, :, :self.nhidden*2]
+        out = self.set(z)
+        out, _ = self.gru_rnn(out)
         out = self.att(query, key, out)
         out = self.z0_to_obs(out)
         return out        

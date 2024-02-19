@@ -11,3 +11,6 @@ col_sum = torch.sum(x, dim=1)
 print(x, x.shape)
 print(f"Row Sum: {row_sum}, {row_sum.shape}")
 print(f"Column Sum: {col_sum}, {col_sum.shape}")
+
+y = torch.tensor([1,2,3,4,5,6])
+print(y[2:4])

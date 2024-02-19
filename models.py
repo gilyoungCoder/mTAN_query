@@ -4,12 +4,15 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 from setmodels import *
+from grud import GRUD
 
 class create_classifier(nn.Module):
  
-    def __init__(self, latent_dim, nhidden=16, N=2):
+    def __init__(self, latent_dim, nhidden=16, N=2, device ='cuda'):
         super(create_classifier, self).__init__()
-        self.gru_rnn = nn.GRU(latent_dim, nhidden, batch_first=True)
+        self.device = device
+        # self.gru_rnn = nn.GRU(latent_dim, nhidden, batch_first=True)
+        self.gru_rnn = GRUD(latent_dim, nhidden, batch_first=True)
         self.classifier = nn.Sequential(
             nn.Linear(nhidden, 300),
             nn.ReLU(),
@@ -18,8 +21,11 @@ class create_classifier(nn.Module):
             nn.Linear(300, N))
         
        
-    def forward(self, z):
-        _, out = self.gru_rnn(z)
+    def forward(self, z, latent_tp):
+        delta = latent_tp[1:] - latent_tp[:-1]
+        delta = torch.cat([torch.tensor([0]).to(self.device), delta])
+        z = z.transpose(1, 2).contiguous()
+        _, out = self.gru_rnn(z, delta)
         return self.classifier(out.squeeze(0))
     
 
@@ -78,7 +84,7 @@ class multiTimeAttention(nn.Module):
         x, _ = self.attention(query, key, value, mask, dropout)
         x = x.transpose(1, 2).contiguous() \
              .view(batch, -1, self.h * dim)
-        # 50 x 128 x 82
+        # 50 x 128 x 82 -> 256
         return self.linears[-1](x)
     
     
@@ -93,10 +99,12 @@ class enc_mtan_rnn(nn.Module):
         self.n_ref = n_ref
         self.learn_emb = learn_emb
         self.att = multiTimeAttention(2*input_dim, nhidden, embed_time, num_heads)
-        self.set = SetTransformer(nhidden+embed_time, n_ref, nhidden)
-        self.gru_rnn = nn.GRU(nhidden, nhidden, bidirectional=True, batch_first=True)
+        # self.set = SetTransformer(nhidden+embed_time, n_ref, nhidden)
+        self.gru_rnn = GRUD(nhidden, nhidden, bidirectional=True, batch_first=True)
+        # self.gru_rnn = nn.GRU(nhidden, nhidden, bidirectional=True, batch_first=True)
+
         self.hiddens_to_z0 = nn.Sequential(
-            nn.Linear(2*nhidden, 50),
+            nn.Linear(nhidden, 50),
             nn.ReLU(),
             nn.Linear(50, latent_dim * 2))
         if learn_emb:
@@ -136,12 +144,10 @@ class enc_mtan_rnn(nn.Module):
             query = self.fixed_time_embedding(self.query.unsqueeze(0)).to(self.device)
         out = self.att(query, key, x, mask)
         # out  50 x 128 x 256(nhidden)
-        batch_len = out.shape[0]
-        query_expanded = query.repeat(batch_len, 1, 1)         
-        combined_out = torch.cat((out, query_expanded), dim=2)   
-        
-        out = self.set(combined_out)
-        out, _ = self.gru_rnn(out)
+        out = out.transpose(1, 2).contiguous()
+        delta = self.query[1:] - self.query[:-1]
+        delta = torch.cat([torch.tensor([0]).to(self.device), delta])
+        out, _ = self.gru_rnn(out, delta)
         out = self.hiddens_to_z0(out)
 #        print(f"query : {query.shape}") query : torch.Size([1, 128, 128])
         # query 1 x 128 x 128
@@ -158,9 +164,11 @@ class dec_mtan_rnn(nn.Module):
         self.device = device
         self.nhidden = nhidden
         self.learn_emb = learn_emb
-        self.att = multiTimeAttention(2*nhidden, 2*nhidden, embed_time, num_heads)
-        self.set = SetTransformer(latent_dim+embed_time, n_ref, latent_dim)
-        self.gru_rnn = nn.GRU(latent_dim, nhidden, bidirectional=True, batch_first=True)    
+        self.att = multiTimeAttention(nhidden, 2*nhidden, embed_time, num_heads)
+        # self.set = SetTransformer(latent_dim+embed_time, n_ref, latent_dim)
+        # self.gru_rnn = nn.GRU(latent_dim, nhidden, bidirectional=True, batch_first=True)    
+        self.gru_rnn = GRUD(latent_dim, nhidden, bidirectional=True, batch_first=True)    
+
         self.z0_to_obs = nn.Sequential(
             nn.Linear(2*nhidden, 50),
             nn.ReLU(),
@@ -197,8 +205,10 @@ class dec_mtan_rnn(nn.Module):
             query = self.fixed_time_embedding(time_steps).to(self.device)
             key = self.fixed_time_embedding(latent_tp.unsqueeze(0)).to(self.device)
         
-        out = self.set(z)
-        out, _ = self.gru_rnn(out)
+        z = z.transpose(1, 2).contiguous()
+        delta = latent_tp[1:] - latent_tp[:-1]
+        delta = torch.cat([torch.tensor([0]).to(self.device), delta])
+        out, _ = self.gru_rnn(z, delta)
         out = self.att(query, key, out)
         out = self.z0_to_obs(out)
         return out        

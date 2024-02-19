@@ -1,16 +1,14 @@
 import torch
 
-# 임의의 2D 텐서 생성
-x = torch.tensor([[1, 2, 3], [4, 5, 6]])
+# 예시: delta 텐서 생성
+delta = torch.tensor([1.0])
 
-# 첫 번째 차원(행)을 따라 합 계산
-row_sum = torch.sum(x, dim=0)
+# X 텐서의 크기를 나타내는 예시 (예를 들어, 2x2x2)
+X = torch.randn(2, 2, 2)  # X 텐서의 실제 크기와 상관없는 예시 값
 
-# 두 번째 차원(열)을 따라 합 계산
-col_sum = torch.sum(x, dim=1)
-print(x, x.shape)
-print(f"Row Sum: {row_sum}, {row_sum.shape}")
-print(f"Column Sum: {col_sum}, {col_sum.shape}")
+# delta 값을 X 텐서와 같은 크기로 반복
+# torch.tile(delta, X.shape)는 torch.tile(delta, (2, 2, 2))와 동일하게 작동하지만,
+# 아래 코드는 일반적인 사용 예시를 위해 수정됩니다.
+repeated_delta = torch.tile(delta, X.size())
 
-y = torch.tensor([1,2,3,4,5,6])
-print(y[2:4])
+print(repeated_delta)

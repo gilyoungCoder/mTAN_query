@@ -92,9 +92,9 @@ if __name__ == '__main__':
         dim, args.latent_dim, args.gen_hidden, 
         embed_time=128, n_ref=args.num_ref_points, learn_emb=args.learn_emb, num_heads=args.dec_num_heads).to(device)
     
-    set_trans = setmodels.SetTransformer(dim_input=128+args.latent_dim, num_outputs=256, dim_output= 148).to(device)
+    # set_trans = setmodels.SetTransformer(dim_input=128+args.latent_dim, num_outputs=128, dim_output= 148).to(device)
     
-    classifier = models.create_classifier(148, args.rec_hidden).to(device)
+    classifier = models.create_classifier(args.latent_dim, args.rec_hidden).to(device)
     params = (list(rec.parameters()) + list(dec.parameters()) + list(classifier.parameters()))
     print('parameters:', utils.count_parameters(rec), utils.count_parameters(dec), utils.count_parameters(classifier))
     optimizer = optim.Adam(params, lr=args.lr)
@@ -135,16 +135,16 @@ if __name__ == '__main__':
             z0 = epsilon * torch.exp(.5 * qz0_logvar) + qz0_mean
             z0 = z0.view(-1, qz0_mean.shape[1], qz0_mean.shape[2])
             # query 1 x 128 x 128
-            query_expanded = query.repeat(batch_len, 1, 1)         
-            combined_z0 = torch.cat((z0, query_expanded), dim=2)   
+            # query_expanded = query.repeat(batch_len, 1, 1)         
+            # combined_z0 = torch.cat((z0, query_expanded), dim=2)   
             # print(f"combined_z0: {combined_z0.shape}")
-            z1 = set_trans(combined_z0)
+            # z1 = set_trans(combined_z0)
             # print(f"z1: {z1.shape}") z1: torch.Size([50, 256, 20])
-            pred_y = classifier(z1)
+            pred_y = classifier(z0, latent_tp)
             # print(f"latent_tp: {latent_tp}")
             # print(f"z0: {z0.shape}, out: {out.shape}, observed_data: {observed_data.shape}, observed_tp: {observed_tp.shape}, pred_y: {pred_y.shape}")
             pred_x = dec(
-                combined_z0, observed_tp[None, :, :].repeat(args.k_iwae, 1, 1).view(-1, observed_tp.shape[1]), latent_tp)
+                z0, observed_tp[None, :, :].repeat(args.k_iwae, 1, 1).view(-1, observed_tp.shape[1]), latent_tp)
             pred_x = pred_x.view(args.k_iwae, batch_len, pred_x.shape[1], pred_x.shape[2]) #nsample, batch, seqlen, dim
             # z0: torch.Size([50(batch), 128(rftp), 20(ldim)]), out: torch.Size([50, 128, 40]), observed_data: torch.Size([50, 203, 41]), observed_tp: torch.Size([50, 203]), pred_y: torch.Size([50, 2])
             # compute loss
@@ -167,7 +167,7 @@ if __name__ == '__main__':
             
         total_time += time.time() - start_time
         val_loss, val_acc, val_auc = utils.evaluate_classifier(
-            rec, set_trans, val_loader, args=args, classifier=classifier, reconst=True, num_sample=1, dim=dim)
+            rec, val_loader, args=args, classifier=classifier, reconst=True, num_sample=1, dim=dim)
         # VesslBoard에 검증 데이터 로그 기록 (검증 루프 후)
         vessl.log(step = itr, payload ={'Loss/Val': val_loss,
                                         'Accuracy/Val': val_acc,
@@ -179,7 +179,7 @@ if __name__ == '__main__':
             classifier_state_dict = classifier.state_dict()
             optimizer_state_dict = optimizer.state_dict()
         test_loss, test_acc, test_auc = utils.evaluate_classifier(
-            rec, set_trans, test_loader, args=args, classifier=classifier, reconst=True, num_sample=1, dim=dim)
+            rec, test_loader, args=args, classifier=classifier, reconst=True, num_sample=1, dim=dim)
         print('Iter: {}, recon_loss: {:.4f}, ce_loss: {:.4f}, acc: {:.4f}, mse: {:.4f}, val_loss: {:.4f}, val_acc: {:.4f}, test_acc: {:.4f}, test_auc: {:.4f}'
               .format(itr, train_recon_loss/train_n, train_ce_loss/train_n, 
                       train_acc/train_n, mse/train_n, val_loss, val_acc, test_acc, test_auc))

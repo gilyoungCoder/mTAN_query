@@ -5,7 +5,6 @@ import torch
 from torch.utils.data import DataLoader
 from torchvision.datasets.utils import download_url
 import matplotlib.pyplot as plt
-import utils
 
 
 ## returns max, min val feature list among records
@@ -30,6 +29,9 @@ def get_data_min_max(records, device):
             else:
                 batch_max.append(-inf)
                 batch_min.append(inf)
+        batch_max = [x.to(device) for x in batch_max]
+        batch_min = [x.to(device) for x in batch_min]
+
         batch_max = torch.stack(batch_max)
         batch_min = torch.stack(batch_min)
 
@@ -202,6 +204,8 @@ class PhysioNet(object):
                     for l in lines[1:]:
                         total += 1
                         time, param, val = l.split(",")
+                        if float(val) == -1:
+                            continue
                         # hours
                         time = float(time.split(":")[0]) + float(time.split(":")[1]) / 60.0
                         # 계산 속도 향상을 위한 시간 단위 부여
@@ -329,62 +333,6 @@ class PhysioNet(object):
         plt.close(fig)
 
 
-def variable_time_collate_fn(
-    batch,
-    args,
-    device=torch.device("cpu"),
-    data_type="train",
-    data_min=None,
-    data_max=None,
-):
-    D = batch[0][2].shape[1]            # 변수 개수(특성)
-    # @inverse_indices 
-    combined_tt, inverse_indices = torch.unique(torch.cat(ex[1] for ex in batch), sorted=True, return_inverse=True)
-    combined_tt = combined_tt.to(device)
-    
-    offset = 0
-    combined_vals = torch.zeros([len(batch), len(combined_tt), D]).to(device)
-    combined_mask = torch.zeros([len(batch), len(combined_tt), D]).to(device)
-    
-    combined_labels = None
-    N_labels = 1            # label 목록 개수
-    
-    # nan array
-    combined_labels = torch.zeros(len(batch), N_labels) + torch.tensor(float('nan'))
-    combined_labels = combined_labels.to(device)
-
-    for b, (record_id, tt, vals, mask, labels) in enumerate(batch):
-        tt = tt.to(device)
-        vals = vals.to(device)
-        mask = mask.to(device)
-        
-        if labels is not None:
-            labels = labels.to(device)
-            
-        indices = inverse_indices[offset : offset+len(tt)]
-        offset = offset + len(tt)
-        
-        combined_vals[b, indices] = vals
-        combined_mask[b, indices] = mask
-        
-        if labels is not None:
-            combined_labels[b] = labels
-    
-    combined_vals, _, _ = utils.normalize_masked_data(combined_vals, combined_mask, 
-                                                      att_min = data_min, att_max = data_max)
-    
-    if torch.max(combined_tt) != 0:
-        combined_tt = combined_tt / torch.max(combined_tt)
-    
-    data_dict = {
-        "data" : combined_vals,
-        "time_steps" : combined_tt,
-        "mask" : combined_mask,
-        "labels" : combined_labels
-    }
-    
-    # data_dict = utils.split_and_subsample_batch(data_dict, args, data_type = data_type)
-    return data_dict
 
 if __name__ == '__main__':
     torch.manual_seed(1991) 

@@ -92,7 +92,7 @@ if __name__ == '__main__':
         dim, args.latent_dim, args.gen_hidden, 
         embed_time=128, learn_emb=args.learn_emb, num_heads=args.dec_num_heads).to(device)
     
-    set_trans = setmodels.SetTransformer(dim_input=128+args.latent_dim, num_outputs=256, dim_output= 148).to(device)
+    set_trans = setmodels.SetTransformer(dim_input=128+args.latent_dim, num_outputs=128, dim_output= 148).to(device)
     
     classifier = models.create_classifier(148, args.rec_hidden).to(device)
     params = (list(rec.parameters()) + list(dec.parameters()) + list(classifier.parameters()))
@@ -141,7 +141,7 @@ if __name__ == '__main__':
             z1 = set_trans(combined_z0)
             # print(f"z1: {z1.shape}") z1: torch.Size([50, 256, 20])
             pred_y = classifier(z1)
-            
+            print(f"latent_tp: {latent_tp}")
             # print(f"z0: {z0.shape}, out: {out.shape}, observed_data: {observed_data.shape}, observed_tp: {observed_tp.shape}, pred_y: {pred_y.shape}")
             pred_x = dec(
                 combined_z0, observed_tp[None, :, :].repeat(args.k_iwae, 1, 1).view(-1, observed_tp.shape[1]), latent_tp)

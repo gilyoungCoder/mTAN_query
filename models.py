@@ -93,11 +93,11 @@ class enc_mtan_rnn(nn.Module):
         self.n_ref = n_ref
         self.learn_emb = learn_emb
         self.att = multiTimeAttention(2*input_dim, nhidden, embed_time, num_heads)
-        self.gru_rnn = nn.GRU(nhidden+embed_time, nhidden, bidirectional=True, batch_first=True)
+        self.gru_rnn = nn.GRU(nhidden+embed_time, nhidden+embed_time, bidirectional=True, batch_first=True)
         self.hiddens_to_z0 = nn.Sequential(
-            nn.Linear(2*nhidden, 50),
+            nn.Linear(2*nhidden+2*embed_time, 50),
             nn.ReLU(),
-            nn.Linear(50, latent_dim * 2))
+            nn.Linear(50, latent_dim * 2+ embed_time))
         if learn_emb:
             self.periodic = nn.Linear(1, embed_time-1)
             self.linear = nn.Linear(1, 1)
@@ -157,7 +157,7 @@ class dec_mtan_rnn(nn.Module):
         self.nhidden = nhidden
         self.learn_emb = learn_emb
         self.att = multiTimeAttention(2*nhidden, 2*nhidden, embed_time, num_heads)
-        self.gru_rnn = nn.GRU(latent_dim+embed_time, nhidden, bidirectional=True, batch_first=True)    
+        self.gru_rnn = nn.GRU(latent_dim+embed_time, nhidden+embed_time, bidirectional=True, batch_first=True)    
         self.z0_to_obs = nn.Sequential(
             nn.Linear(2*nhidden, 50),
             nn.ReLU(),
@@ -195,6 +195,7 @@ class dec_mtan_rnn(nn.Module):
             key = self.fixed_time_embedding(latent_tp.unsqueeze(0)).to(self.device)
         
         out, _ = self.gru_rnn(z)
+        out = out[:, :, :self.nhidden*2]
         out = self.att(query, key, out)
         out = self.z0_to_obs(out)
         return out        

@@ -130,7 +130,7 @@ if __name__ == '__main__':
             observed_data, observed_mask, observed_tp \
                 = train_batch[:, :, :dim], train_batch[:, :, dim:2*dim], train_batch[:, :, -1]
             out, query, latent_tp = rec(torch.cat((observed_data, observed_mask), 2), observed_tp)
-            qz0_mean, qz0_logvar = out[:, :, :args.latent_dim], out[:, :, args.latent_dim:]
+            qz0_mean, qz0_logvar = out[:, :, :args.latent_dim], out[:, :, args.latent_dim:args.latent_dim*2]
             epsilon = torch.randn(args.k_iwae, qz0_mean.shape[0], qz0_mean.shape[1], qz0_mean.shape[2]).to(device)
             z0 = epsilon * torch.exp(.5 * qz0_logvar) + qz0_mean
             z0 = z0.view(-1, qz0_mean.shape[1], qz0_mean.shape[2])

@@ -67,7 +67,7 @@ def  evaluate_classifier(model, trans, test_loader, dec=None, args=None, classif
                 torch.cat((observed_data, observed_mask), 2), observed_tp)
             if reconst:
                 qz0_mean, qz0_logvar = out[:, :,
-                                           :args.latent_dim], out[:, :, args.latent_dim:]
+                                           :args.latent_dim], out[:, :, args.latent_dim:args.latent_dim*2]
                 epsilon = torch.randn(
                     num_sample, qz0_mean.shape[0], qz0_mean.shape[1], qz0_mean.shape[2]).to(device)
                 z0 = epsilon * torch.exp(.5 * qz0_logvar) + qz0_mean
